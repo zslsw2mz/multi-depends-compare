@@ -1,4 +1,4 @@
-package depends.format.compare;
+package depends.compare;
 
 import java.util.ArrayList;
 

@@ -15,3 +15,5 @@ java_design_pattern_test/
 lang
 *.dot
 *.png
+*.xls
+*.json

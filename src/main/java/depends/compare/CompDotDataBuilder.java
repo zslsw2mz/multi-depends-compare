@@ -1,7 +1,4 @@
-package depends.format.compare;
-
-import depends.deptypes.DependencyType;
-import depends.format.matrix.DependencyMatrix;
+package depends.compare;
 
 import java.io.FileNotFoundException;
 import java.io.PrintWriter;
@@ -11,25 +8,41 @@ import java.util.*;
  * Created by xzy on 2018/11/27.
  */
 public class CompDotDataBuilder {
-    public static final String DOTTED = "dotted";
-    public static final String BOLD = "bold";
-
     private CompareDataBuilder compareDataBuilder;
+    private String outputDotFileName;
+    private int versionAmout;
+    
+    public CompDotDataBuilder(CompareDataBuilder compareDataBuilder, String outputDotFileName) {
+        this.compareDataBuilder = compareDataBuilder;
+        this.outputDotFileName = outputDotFileName;
+        this.versionAmout = compareDataBuilder.getVersionAmount();
+    }
 
-    public void build(DependencyMatrix preMatrix, DependencyMatrix curMatrix, String outputDotFile) {
-        // Step 1: build new Nodes and Relations using CompareDataBuilder
-        compareDataBuilder = new CompareDataBuilder(preMatrix, curMatrix);
-        compareDataBuilder.build();
-        // Step 2: keep only differences on dependency, generate compared dot file
-        generateOverallDotFile(outputDotFile);
-        generateDotForDepType(outputDotFile, DependencyType.CALL);
+    // 对每两个相邻版本，生成overall的dot文件
+    public void buildAll() {
+    	for(int i=0; i<versionAmout-1; i++) {
+            generateOverallDotFileFor(i);
+    	}
     }
     
-    public void generateOverallDotFile(String outputDotFile) {
-    	PackageTreeNode root = compareDataBuilder.getRoot();    	
+    // 生成指定的两个版本之间的overall dot文件
+    public void buildBetween(int preVersion, int curVersion) {
+    	generateOverallDotFileFor(preVersion);
+    }
+    
+    // 生成指定DepType对应的每两个相邻版本之间的change detail dot文件
+    public void buildForDepType(String depType) {
+    	for(int i=0; i<compareDataBuilder.getVersionAmount()-1; i++) {
+    		generateDotForDepTypeBetween(depType, i);
+    	}
+    }
+    
+    // version表示pre版本号，则current版本号为version+1
+    public void generateOverallDotFileFor(int version) {
+    	PackageTreeNode root = compareDataBuilder.getRoot(version);    	
     	PrintWriter writer;
     	try {
-    		writer = new PrintWriter(outputDotFile+"_overall.dot");
+    		writer = new PrintWriter(outputDotFileName+"_"+version+"_"+(version+1)+"_overall.dot");
 
     		// file id: qualified name
             for(Map.Entry<String, Integer> entry: compareDataBuilder.getFileUnionMap().entrySet()) {
@@ -40,9 +53,9 @@ public class CompDotDataBuilder {
             writer.println("{");
             
             for(PackageTreeNode child: root.getChildren()) {
-            	addNodes(writer, child, "");
+            	addNodes(writer, child, "", version);
             }
-	    	addRelations(writer);
+	    	addRelations(writer,version);
 
             writer.println("}");
             writer.close();
@@ -51,23 +64,23 @@ public class CompDotDataBuilder {
 		}
     }
     
-    public void generateDotForDepType(String outputDotFile, String depType) {
-    	PackageTreeNode root = compareDataBuilder.getRoot();
+    public void generateDotForDepTypeBetween(String depType, int version) {
+    	PackageTreeNode root = compareDataBuilder.getRoot(version);
     	PrintWriter writer;
     	try {
-			writer = new PrintWriter(outputDotFile+"_"+depType+".dot");
+			writer = new PrintWriter(outputDotFileName+"_"+depType+"_"+version+"_"+(version+1)+".dot");
 			// file id: qualified name
             for(Map.Entry<String, Integer> entry: compareDataBuilder.getFileUnionMap().entrySet()) {
-            	if(compareDataBuilder.getAllFileForDepType(depType).contains(entry.getValue()))
+            	if(compareDataBuilder.getAllFileForDepType(version, depType).contains(entry.getValue()))
             		writer.println("//" + entry.getValue() + ":" + entry.getKey());
             }
             writer.println("digraph");
             writer.println("{");
             
             for(PackageTreeNode child: root.getChildren()) {
-            	addNodes(writer, child, depType);
+            	addNodes(writer, child, depType, version);
             }
-	    	addDetailedRelations(writer, depType);
+	    	addDetailedRelations(writer, depType, version);
 
             writer.println("}");
             writer.close();
@@ -76,13 +89,13 @@ public class CompDotDataBuilder {
 		}
     }
     
-    private void addNodes(PrintWriter writer, PackageTreeNode current, String depType) {
+    private void addNodes(PrintWriter writer, PackageTreeNode current, String depType, int version) {
     	if(current.isLeaf()) {
     		Integer fileId = compareDataBuilder.getFileUnionMap().get(current.getQualifiedName());
     		Set<Integer> fileSet = depType.length()>0 ? 
-    				compareDataBuilder.getAllFileForDepType(depType):compareDataBuilder.getAllFileInCompResult();
+    				compareDataBuilder.getAllFileForDepType(version, depType):compareDataBuilder.getAllFileInCompResult(version);
     		if(fileSet.contains(fileId)) {
-    			int existenceCode = compareDataBuilder.getFileExistenceMap().get(fileId);
+    			int existenceCode = compareDataBuilder.getFileExistenceMap(version).get(fileId);
     			switch (existenceCode) {
 				case 0:
 					writer.println("\t" + fileId + " [style=dotted];");
@@ -105,13 +118,13 @@ public class CompDotDataBuilder {
     	writer.println("subgraph cluster_"+current.getQualifiedName().replace('.','_'));
     	writer.println("{");
     	for(PackageTreeNode child: current.getChildren()) {
-    		addNodes(writer, child, depType);
+    		addNodes(writer, child, depType, version);
     	}
     	writer.println("}");  	
     }
     
-    private void addRelations(PrintWriter writer) {
-    	Map<Integer, Map<Integer, Integer>> compResultMap = compareDataBuilder.getCompResultMap();
+    private void addRelations(PrintWriter writer, int version) {
+    	Map<Integer, Map<Integer, Integer>> compResultMap = compareDataBuilder.getCompResultMap(version);
     	for(Integer src: compResultMap.keySet()) {
     		for(Integer dst: compResultMap.get(src).keySet()) {
     			int changeTypeCode = compResultMap.get(src).get(dst);
@@ -132,26 +145,32 @@ public class CompDotDataBuilder {
     	}
     }
     
-    private void addDetailedRelations(PrintWriter writer, String depType) {
-    	List<List<Integer>> detailInfo = compareDataBuilder.getChangeDetailMapByDepType(depType);
-    	for(List<Integer> detail: detailInfo) {
-    		int src = detail.get(0);
-    		int dst = detail.get(1);
-    		int changeTypeCode = detail.get(2);
-    		switch(changeTypeCode) {
-			case 0:
-				writer.println("\t" + src + " -> " + dst + " [style=dotted];");
-				break;
-			case 1:
-				writer.println("\t" + src + " -> " + dst + " [style=bold];");
-				break;
-			case 2:
-				String color = detail.get(3)>0 ? "red" : "green";
-				writer.println("\t" + src + " -> " + dst + " [color="+color+"];");
-				break;
-			default:
-				System.out.println("ERROR: Invalid Change Type Code");
-			}
+    private void addDetailedRelations(PrintWriter writer, String depType, int version) {
+    	Map<Integer, Map<Integer, List<List<Integer>>>> detailInfo = compareDataBuilder.getChangeDetailMapByDepType(depType);
+    	for(Integer src: detailInfo.keySet()) {
+    		for(Integer dst: detailInfo.get(src).keySet()) {
+    			List<List<Integer>> detailList = detailInfo.get(src).get(dst);
+    			for(List<Integer> detail: detailList) {
+    				if(detail.get(0).equals(version)) {
+                		int changeTypeCode = detail.get(1);
+                		switch(changeTypeCode) {
+            			case 0:
+            				writer.println("\t" + src + " -> " + dst + " [style=dotted];");
+            				break;
+            			case 1:
+            				writer.println("\t" + src + " -> " + dst + " [style=bold];");
+            				break;
+            			case 2:
+            				String color = detail.get(2)>0 ? "red" : "green";
+            				writer.println("\t" + src + " -> " + dst + " [color="+color+"];");
+            				break;
+            			default:
+            				System.out.println("ERROR: Invalid Change Type Code");
+            			}
+                		break;
+        			}
+    			}
+    		}
     	}
     }
 
