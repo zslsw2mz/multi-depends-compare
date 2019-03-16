@@ -1,18 +1,21 @@
 package depends.util;
 
-import depends.extractor.AbstractLangWorker;
-
 public class Configure {
     public Configure(String lang, String inputDir, String includeDir, String projectName) {
         setInputSrcPath(inputDir);
         setIncludePath(includeDir);
         setProjectName(projectName);
     }
+    
+    public Configure(String lang, String inputDir, String includeDir, String projectName, int version) {
+    	this(lang, inputDir, includeDir, projectName);
+    	this.version = version;
+    }
 
 	private String  inputSrcPath;
     private String  includeSrcPath;
     private String  projectName ;
-
+    private int version;
     private String  schemaVersion = "1.0";
 
     public String getInputSrcPath() {
@@ -39,12 +42,20 @@ public class Configure {
         this.projectName = projectName;
     }
 
-    public String getOutputJsonFile() {
-        return projectName  + "_dep.json";
+    public int getVersion() {
+		return version;
+	}
+
+	public void setVersion(int version) {
+		this.version = version;
+	}
+
+	public String getOutputJsonFile() {
+        return projectName  + "_dep_v"+ version +".json";
     }
 
     public String getOutputXmlFile() {
-    	return projectName + "_dep.xml";
+    	return projectName + "_dep_v"+ version +".xml";
     }
 
     public String getSchemaVersion() {
@@ -56,11 +67,15 @@ public class Configure {
     }
 
 	public String getOutputExcelFile() {
-		return projectName + "_dep.xls";
+		return projectName + "_dep_v"+ version +".xls";
 	}
 	
 	public String getOutputDotFile() {
-		return projectName + "_dep.dot";
+		return projectName + "_dep_v"+ version +".dot";
+	}
+	
+	public String getOutputTxtFile() {
+		return projectName + "_notable_packages_v"+version+".txt";
 	}
 
 }

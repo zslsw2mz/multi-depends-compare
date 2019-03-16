@@ -45,9 +45,9 @@ public class CompDotDataBuilder {
     		writer = new PrintWriter(outputDotFileName+"_"+version+"_"+(version+1)+"_overall.dot");
 
     		// file id: qualified name
-            for(Map.Entry<String, Integer> entry: compareDataBuilder.getFileUnionMap().entrySet()) {
-            	writer.println("//" + entry.getValue() + ":" + entry.getKey());
-            }
+//            for(Map.Entry<String, Integer> entry: compareDataBuilder.getFileUnionMap().entrySet()) {
+//            	writer.println("//" + entry.getValue() + ":" + entry.getKey());
+//            }
             
             writer.println("digraph");
             writer.println("{");
@@ -70,16 +70,17 @@ public class CompDotDataBuilder {
     	try {
 			writer = new PrintWriter(outputDotFileName+"_"+depType+"_"+version+"_"+(version+1)+".dot");
 			// file id: qualified name
-            for(Map.Entry<String, Integer> entry: compareDataBuilder.getFileUnionMap().entrySet()) {
-            	if(compareDataBuilder.getAllFileForDepType(version, depType).contains(entry.getValue()))
-            		writer.println("//" + entry.getValue() + ":" + entry.getKey());
-            }
+//            for(Map.Entry<String, Integer> entry: compareDataBuilder.getFileUnionMap().entrySet()) {
+//            	if(compareDataBuilder.getAllFileForDepType(version, depType).contains(entry.getValue()))
+//            		writer.println("//" + entry.getValue() + ":" + entry.getKey());
+//            }
             writer.println("digraph");
             writer.println("{");
             
             for(PackageTreeNode child: root.getChildren()) {
             	addNodes(writer, child, depType, version);
             }
+            
 	    	addDetailedRelations(writer, depType, version);
 
             writer.println("}");
@@ -138,6 +139,8 @@ public class CompDotDataBuilder {
     			case 2:
     				writer.println("\t" + src + " -> " + dst + " [color=red];");
     				break;
+    			case 3:
+    				writer.println("\t" + src + " -> " + dst + " [color=green];");
     			default:
     				System.out.println("ERROR: Invalid Change Type Code");
     			}
@@ -161,6 +164,7 @@ public class CompDotDataBuilder {
             				writer.println("\t" + src + " -> " + dst + " [style=bold];");
             				break;
             			case 2:
+            			case 3:
             				String color = detail.get(2)>0 ? "red" : "green";
             				writer.println("\t" + src + " -> " + dst + " [color="+color+"];");
             				break;

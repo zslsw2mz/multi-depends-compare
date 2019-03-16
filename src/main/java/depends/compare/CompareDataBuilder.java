@@ -1,17 +1,19 @@
 package depends.compare;
 
+import depends.data.bean.CompareRecord;
+import depends.data.bean.DependencyRecord;
+import depends.data.bean.Record;
 import depends.deptypes.DependencyType;
 import depends.format.matrix.DependencyMatrix;
 
 import java.util.*;
-
-import org.stringtemplate.v4.compiler.CodeGenerator.list_return;
 
 /**
  * Created by xzy on 2018/11/27.
  */
 public class CompareDataBuilder {
 	private int versionAmount;
+	private String projectName;
 	// DependencyMatrix中包含Nodes（ArrayList<String>）和Relations（Map）
     private List<DependencyMatrix> dependencyMatrixs;
 
@@ -25,7 +27,10 @@ public class CompareDataBuilder {
     // new file id -> existence code: 0 -> only in pre, 1 -> only in cur, 2 -> both
     private List<Map<Integer, Integer>> fileExistenceMaps;
     
-    // Compare Result : src -> dst -> change type code ( -> summary of overall change)
+    /* Compare Result : src -> dst -> change type code ( -> summary of overall change)
+     * [change type code]: 0 -> disappear, 1 -> occur, 2 -> type change, 3 -> amount change but same types
+     * */
+    
 	private List<Map<Integer, Map<Integer, Integer>>> compResultMaps;
 	
 	/* Change Detail: dependency type -> src -> dst -> changeDetail
@@ -36,8 +41,13 @@ public class CompareDataBuilder {
 	
 	// Package Hierarchy Tree root node
 	private List<PackageTreeNode> roots;
+	
+	private List<CompareRecord> compareRecords;
 
-    public CompareDataBuilder(List<DependencyMatrix> dependencyMatrixs) {
+    private List<DependencyRecord> records = new ArrayList<>();
+
+    public CompareDataBuilder(String projectName, List<DependencyMatrix> dependencyMatrixs) {
+    	this.projectName = projectName;
     	this.dependencyMatrixs = dependencyMatrixs;
     	this.versionAmount = dependencyMatrixs.size();
         fileUnionMap = new TreeMap<>();
@@ -45,6 +55,7 @@ public class CompareDataBuilder {
         fileExistenceMaps = new ArrayList<>();
         compResultMaps = new ArrayList<>();
         roots = new ArrayList<>();
+        compareRecords = new ArrayList<>();
         initChangeDetailMap();
     }
     
@@ -70,6 +81,8 @@ public class CompareDataBuilder {
         for(String depType: changeDetailMap.keySet()) {
         	buildChangeDetailFor(depType);
         }
+        // 生成写入数据库的CompareRecord List
+        buildCompareRecordList();
     }
 
     private void buildNodes() {
@@ -124,6 +137,27 @@ public class CompareDataBuilder {
                 regeneratedRelation.put(getNewFileId(i, srcEntry.getKey()), dstMap);
             }
     		regeneratedRelations.add(regeneratedRelation);
+    		// 生成写入数据库的Dependency Record List
+    		generateDependencyRecords(i, regeneratedRelation);
+    	}
+    }
+    
+    private void generateDependencyRecords(int version, Map<Integer, Map<Integer, Map<String, Integer>>> regeneratedRelation) {
+    	for(Integer src : regeneratedRelation.keySet()) {
+    		for(Integer dest: regeneratedRelation.get(src).keySet()) {
+    			DependencyRecord record = new DependencyRecord();
+    			record.setVersion(version+1);
+    			record.setProjectName(projectName);
+    			record.setSrc(src);
+    			record.setDest(dest);
+    			for(Map.Entry<String, Integer> entry: regeneratedRelation.get(src).get(dest).entrySet()) {
+    				String type = entry.getKey().toLowerCase();
+    				int weight = entry.getValue();
+    				record.setValue(type, weight);
+    			}
+    			record.updateTotalValue();
+    			records.add(record);
+    		}
     	}
     }
     
@@ -148,19 +182,36 @@ public class CompareDataBuilder {
             		 // iterate through dst
             		 if(preDstMap.containsKey(dst) && curDstMap.containsKey(dst)) {
             			 // dst in both version, check if relation changes
+            			 // 先简单判断，如果两个版本中depends条数不一样，那么一定是依赖类型有变化[2]
             			 if(preDstMap.get(dst).size() != curDstMap.size()) {
             				 compResultMap.put(src, new HashMap<>());
             				 compResultMap.get(src).put(dst, 2);
             				 continue;
             			 }
+            			 // 如果depends条数相同，判断是不是每个dependType都一一对应
+            			 boolean allDepTypeMatch = true;
             			 for(Map.Entry<String, Integer> depMapEntry: preDstMap.get(dst).entrySet()) {
-            				 boolean hasDep = curDstMap.get(dst).containsKey(depMapEntry.getKey());
-            				 if(!hasDep || (hasDep && !curDstMap.get(dst).get(depMapEntry.getKey()).equals(depMapEntry.getValue()))) {
-            					 compResultMap.put(src, new HashMap<>());
-                				 compResultMap.get(src).put(dst, 2);
-                				 break;
+            				 if(!curDstMap.get(dst).containsKey(depMapEntry.getKey())) {
+            					 allDepTypeMatch = false;
+            					 break;
             				 }
             			 }
+            			 // depType不是一一对应，那么是依赖类型有变化[2]
+            			 if(!allDepTypeMatch) {
+            				 compResultMap.put(src, new HashMap<>());
+            				 compResultMap.get(src).put(dst, 2);
+            				 break;
+            			 } else { // depType一一对应，开始比较每种依赖类型的数量
+            				 for(Map.Entry<String, Integer> depMapEntry: preDstMap.get(dst).entrySet()) {
+            					 int dstWeight = curDstMap.get(dst).get(depMapEntry.getKey());
+            					 if(dstWeight != depMapEntry.getValue()) {
+            						 compResultMap.put(src, new HashMap<>());
+            						 compResultMap.get(src).put(dst, 3);
+            						 break;
+            					 }
+            				 }
+            			 }
+            			 
             		 } else if(preDstMap.containsKey(dst) && !curDstMap.containsKey(dst)) {
             			 // relation disappear
             			 compResultMap.put(src, new HashMap<>());
@@ -229,6 +280,7 @@ public class CompareDataBuilder {
 							detailInfo.add(curDepMap.get(depType));
 							break;
 						case 2:
+						case 3:
 							detailInfo.add(curDepMap.get(depType)-preDepMap.get(depType));
 							break;
 		    			}
@@ -262,7 +314,37 @@ public class CompareDataBuilder {
     		}
     	}
     	return root;
-    }
+    } 
+	
+	private void buildCompareRecordList() {
+		for(int curVersion = 0; curVersion < versionAmount-1; curVersion++) {
+			Map<Integer, Map<Integer, Integer>> compResultMap = compResultMaps.get(curVersion);
+			for(Integer src: compResultMap.keySet()) {
+				for(Integer dst: compResultMap.get(src).keySet()) {
+					CompareRecord record = new CompareRecord();
+					record.setSrc(src);
+					record.setDest(dst);
+					record.setVersion(curVersion+1);
+					record.setProjectName(projectName);
+					for(String depType: DependencyType.allDependencies()) {
+						if(changeDetailMap.get(depType).get(src)!=null && 
+								changeDetailMap.get(depType).get(src).get(dst)!=null) {
+							List<List<Integer>> changeDetails = changeDetailMap.get(depType).get(src).get(dst);
+							for(List<Integer> changeDetail: changeDetails) {
+								// [0]存储的是版本号信息
+								if(changeDetail.get(0).intValue() == curVersion) {
+									record.setValue(depType, changeDetail.get(2));
+									break;
+								}
+							}
+						}
+					}
+					record.updateTotalValue();
+					compareRecords.add(record);
+				}
+			}
+		}
+	}
 
     public int getVersionAmount() {
 		return versionAmount;
@@ -278,7 +360,7 @@ public class CompareDataBuilder {
     
     public Map<Integer, Integer> getFileExistenceMap(int index) {
 		return fileExistenceMaps.get(index);
-	}
+	} 
 
     public List<Map<Integer, Map<Integer, Integer>>> getCompResultMaps() {
     	return compResultMaps;
@@ -290,6 +372,10 @@ public class CompareDataBuilder {
 
 	public Map<Integer, Map<Integer, List<List<Integer>>>> getChangeDetailMapByDepType(String depType) {
 		return changeDetailMap.get(depType);
+	}
+
+	public List<CompareRecord> getCompareRecords() {
+		return compareRecords;
 	}
 
 	public PackageTreeNode getRoot(int index) {
@@ -316,6 +402,10 @@ public class CompareDataBuilder {
 	
 	private int getNewFileId(int version, int fileId) {
 		return fileUnionMap.get(dependencyMatrixs.get(version).getNodes().get(fileId));
+	}
+
+	public List<DependencyRecord> getRecords() {
+		return records;
 	}
 
 }

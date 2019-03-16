@@ -69,6 +69,7 @@ public class DepTypeXmlBuilder {
 				changeType += "occur";
 				break;
 			case 2:
+			case 3:
 				changeType += "change";
 				break;
 			default:

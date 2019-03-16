@@ -29,6 +29,24 @@ public class EntityRepo implements IdGenerator,TypeInfer{
 	private int nextAvaliableIndex;
 	private BuiltInTypeIdenfier buildInProcessor = new NullParser();
 	private ImportLookupStrategy importLookupStrategy = new JavaImportLookupStrategy();
+	// ----- 依赖的外部包Set -----
+	private Set<String> importedPackages = new HashSet<>();	
+	private Set<String> builtInPackages = new HashSet<>();
+	public Set<String> getImportedPackages() {
+		return importedPackages;
+	}
+	public void addImportedPackages(String pkg) {
+		// 过滤掉java, javax, com.sun开头的包
+		if(!buildInProcessor.isBuiltInTypePrefix(pkg))
+			importedPackages.add(pkg);
+	}
+	public Set<String> getBuiltInPackages() {
+		return builtInPackages;
+	}
+	public void addBuiltInPackages(String pkg) {
+		builtInPackages.add(pkg);
+	}
+	// ---------------------------
 	public ImportLookupStrategy getImportLookupStrategy() {
 		return importLookupStrategy;
 	}

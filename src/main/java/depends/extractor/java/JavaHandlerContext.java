@@ -16,6 +16,9 @@ public class JavaHandlerContext extends HandlerContext {
 		if (pkgEntity == null) {
 			pkgEntity = new PackageEntity(packageName, idGenerator.generateId());
 			entityRepo.add(pkgEntity);
+			// ----- 识别外部依赖用 ------
+			entityRepo.addBuiltInPackages(packageName);
+			// --------------------------
 		}
 		entityRepo.setParent(currentFileEntity,pkgEntity);
 		return pkgEntity;

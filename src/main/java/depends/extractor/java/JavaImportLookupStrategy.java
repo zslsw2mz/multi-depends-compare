@@ -25,9 +25,21 @@ public class JavaImportLookupStrategy implements ImportLookupStrategy{
 		ArrayList<Entity> result = new ArrayList<>();
 		for (Import importedItem:importedList) {
 			Entity imported = repo.getEntity(importedItem.getContent());
-			if (imported==null) continue;
+			if (imported==null) {
+				// --------- 识别外部依赖的包 ---------
+				String importedName = importedItem.getContent();
+				String[] split = importedName.split("\\.");
+				char lastItem = split[split.length-1].charAt(0);
+				if(lastItem >= 'A' && lastItem <= 'Z') {
+					repo.addImportedPackages(importedName.substring(0, importedName.lastIndexOf('.')));
+				} else {
+					repo.addImportedPackages(importedName);
+				}
+				// ----------------------------------
+				continue;
+			}
 			if (imported instanceof PackageEntity) { 
-				//expand import of package to all classes under the package due to we dis-courage the behavior
+ 				//expand import of package to all classes under the package due to we discourage the behavior
 				for (Entity child:imported.getChildren()) {
 					result.add(child);
 				}

@@ -22,7 +22,8 @@ public class DiffDotDataBuilder {
 		}
 	}
 	
-	/* changeTypeCode有3个值：[0]disappear [1]occur [2] change
+	/* changeTypeCode有4个值：[0]disappear [1]occur [2]type change [3]amount change but types the same
+	 * 将[3]并入[2]中
 	 * 组合的情况有几种，设置不同颜色的连线：
 	 * a. 0+1	green
 	 * b. 1+0	yellow
@@ -64,12 +65,12 @@ public class DiffDotDataBuilder {
 					} else if(pre==1) {
 						if(cur==0)
 							writer.println("\t" + src + " -> " + dst + " [color=yellow];");
-						else if(cur==2) 
+						else if(cur==2 || cur==3) 
 							writer.println("\t" + src + " -> " + dst + " [style=bold];");
-					} else if(pre==2) {
+					} else if(pre==2 || pre==3) {
 						if(cur==0)
 							writer.println("\t" + src + " -> " + dst + " [style=dotted];");
-						else if(cur==2) 
+						else if(cur==2 || cur==3) 
 							writer.println("\t" + src + " -> " + dst + " [color=red];");
 					}
 				}

@@ -25,8 +25,7 @@ public class Main {
 	    Configure configure = new Configure(lang,inputDir,includeDir,projectName);
 
 		new JavaWorker(configure).register();
-		new CppWorker(configure).register();
-
+//		new CppWorker(configure).register();
 
 		AbstractLangWorker worker = LangWorkers.getRegistry().getWorkerOf(lang);
 		

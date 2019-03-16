@@ -16,7 +16,6 @@ public class JavaWorker extends AbstractLangWorker {
     	entityRepo.setImportLookupStrategy(new JavaImportLookupStrategy());
     }
 
-
 	@Override
 	public String supportedLanguage() {
 		return JAVA_LANG;
